@@ -161,17 +161,7 @@ async def run_scraper(args):
             border_style="yellow",
         ))
 
-        progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=40),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            TextColumn("[dim]ETA:[/dim]"),
-            TimeRemainingColumn(),
-            console=console,
-        )
-
+        is_tty = sys.stdout.isatty()
         stats = {
             "Total Found": total,
             "Scraped": 0,
@@ -181,27 +171,50 @@ async def run_scraper(args):
         }
 
         t_extract_start = time.time()
+        last_logged_step = [-1]
 
-        with progress:
+        if is_tty:
+            progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(bar_width=40),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+                TextColumn("[dim]ETA:[/dim]"),
+                TimeRemainingColumn(),
+                console=console,
+            )
+            progress.start()
             task_id = progress.add_task("Extracting...", total=total)
 
-            def on_progress(completed, total_count, biz_data):
+        def on_progress(completed, total_count, biz_data):
+            if is_tty:
                 progress.update(task_id, description=f"Business {completed}/{total_count}")
                 progress.advance(task_id)
-                if biz_data and biz_data.business_name:
-                    stats["Scraped"] += 1
-                    if biz_data.phone_number:
-                        stats["With Phone"] += 1
-                    if biz_data.website_url:
-                        stats["With Website"] += 1
-                else:
-                    stats["Errors"] += 1
+            else:
+                pct = int((completed / max(total_count, 1)) * 100)
+                if completed == total_count or completed - last_logged_step[0] >= max(1, total_count // 10):
+                    last_logged_step[0] = completed
+                    print(f"PROGRESS: Business {completed}/{total_count} ({pct}%)", flush=True)
 
+            if biz_data and biz_data.business_name:
+                stats["Scraped"] += 1
+                if biz_data.phone_number:
+                    stats["With Phone"] += 1
+                if biz_data.website_url:
+                    stats["With Website"] += 1
+            else:
+                stats["Errors"] += 1
+
+        try:
             businesses = await browser.extract_all_concurrent(
                 urls=business_urls,
                 on_progress=on_progress,
                 num_workers=3,
             )
+        finally:
+            if is_tty:
+                progress.stop()
 
         t_extract = time.time() - t_extract_start
         per_biz = t_extract / max(len(businesses), 1)
@@ -248,33 +261,44 @@ async def run_scraper(args):
                     border_style="magenta",
                 ))
 
-                email_progress = Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(bar_width=40),
-                    MofNCompleteColumn(),
-                    TimeElapsedColumn(),
-                    TextColumn("[dim]ETA:[/dim]"),
-                    TimeRemainingColumn(),
-                    console=console,
-                )
-
                 t_email_start = time.time()
                 email_count = 0
                 fb_count = 0
                 ig_count = 0
+                last_email_step = [-1]
 
-                with email_progress:
+                if is_tty:
+                    email_progress = Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(bar_width=40),
+                        MofNCompleteColumn(),
+                        TimeElapsedColumn(),
+                        TextColumn("[dim]ETA:[/dim]"),
+                        TimeRemainingColumn(),
+                        console=console,
+                    )
+                    email_progress.start()
                     task_id = email_progress.add_task("Crawling...", total=len(website_urls))
 
-                    def on_email_progress(completed, total_count, email_data):
+                def on_email_progress(completed, total_count, email_data):
+                    if is_tty:
                         email_progress.update(task_id, description=f"Website {completed}/{total_count}")
                         email_progress.advance(task_id)
+                    else:
+                        pct = int((completed / max(total_count, 1)) * 100)
+                        if completed == total_count or completed - last_email_step[0] >= max(1, total_count // 10):
+                            last_email_step[0] = completed
+                            print(f"CRAWL_PROGRESS: Website {completed}/{total_count} ({pct}%)", flush=True)
 
+                try:
                     email_results = await email_crawler.batch_extract(
                         website_urls,
                         on_progress=on_email_progress
                     )
+                finally:
+                    if is_tty:
+                        email_progress.stop()
 
                 t_email = time.time() - t_email_start
 
