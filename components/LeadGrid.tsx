@@ -6,9 +6,10 @@ import { Search, Filter, Mail, Globe, Instagram, Facebook, ArrowUpDown } from 'l
 
 interface LeadGridProps {
   businesses: BusinessLead[];
+  onUpdateLead?: (index: number, updated: BusinessLead) => void;
 }
 
-export const LeadGrid: React.FC<LeadGridProps> = ({ businesses }) => {
+export const LeadGrid: React.FC<LeadGridProps> = ({ businesses, onUpdateLead }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEmailOnly, setFilterEmailOnly] = useState(false);
   const [filterWebsiteOnly, setFilterWebsiteOnly] = useState(false);
@@ -16,9 +17,10 @@ export const LeadGrid: React.FC<LeadGridProps> = ({ businesses }) => {
   const [filterFacebookOnly, setFilterFacebookOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'rating' | 'reviews' | 'name'>('rating');
 
-  const filtered = useMemo(() => {
+  const filteredWithIndex = useMemo(() => {
     return businesses
-      .filter((b) => {
+      .map((b, originalIndex) => ({ b, originalIndex }))
+      .filter(({ b }) => {
         // Search term matching
         if (searchTerm) {
           const term = searchTerm.toLowerCase();
@@ -36,7 +38,7 @@ export const LeadGrid: React.FC<LeadGridProps> = ({ businesses }) => {
         if (filterFacebookOnly && !b.facebook_url) return false;
         return true;
       })
-      .sort((a, b) => {
+      .sort(({ b: a }, { b: b }) => {
         if (sortBy === 'rating') {
           return (b.rating || 0) - (a.rating || 0);
         }
@@ -157,15 +159,23 @@ export const LeadGrid: React.FC<LeadGridProps> = ({ businesses }) => {
       {/* Grid Display Header */}
       <div className="flex items-center justify-between text-xs text-slate-400 px-1">
         <div>
-          Showing <span className="font-bold text-slate-200">{filtered.length}</span> of{' '}
+          Showing <span className="font-bold text-slate-200">{filteredWithIndex.length}</span> of{' '}
           <span className="font-bold text-slate-200">{businesses.length}</span> Business Lead Cards
         </div>
       </div>
 
       {/* Product Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((b, idx) => (
-          <LeadCard key={idx} business={b} />
+        {filteredWithIndex.map(({ b, originalIndex }) => (
+          <LeadCard
+            key={originalIndex}
+            business={b}
+            onUpdate={(updated) => {
+              if (onUpdateLead) {
+                onUpdateLead(originalIndex, updated);
+              }
+            }}
+          />
         ))}
       </div>
     </div>

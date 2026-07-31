@@ -42,6 +42,14 @@ export default function Home() {
     }
   };
 
+  const handleUpdateLead = (index: number, updatedLead: BusinessLead) => {
+    setBusinesses((prev) => {
+      const next = [...prev];
+      next[index] = updatedLead;
+      return next;
+    });
+  };
+
   const handleStartScrape = async (params: {
     city: string;
     category: string;
@@ -170,8 +178,8 @@ export default function Home() {
         {/* Export Suite */}
         <ExportToolbar businesses={businesses} />
 
-        {/* Product Cards Lead Grid */}
-        <LeadGrid businesses={businesses} />
+        {/* Product Cards Lead Grid with Live Editing */}
+        <LeadGrid businesses={businesses} onUpdateLead={handleUpdateLead} />
       </main>
 
       {/* History Modal */}
